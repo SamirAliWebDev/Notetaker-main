@@ -4,6 +4,7 @@ import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { Features } from './components/Features';
 import { Login } from './pages/Login';
+import { Signup } from './pages/Signup';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { Notes, Folders, Shared, Settings } from './pages/DashboardPages';
 
@@ -48,6 +49,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Notes />} />
           <Route path="folders" element={<Folders />} />
