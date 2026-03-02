@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 export const Hero = () => {
     return (
-        <section className="pt-24 sm:pt-32 pb-20 px-6">
+        <section id="home" className="pt-24 sm:pt-32 pb-20 px-6">
             <div className="max-w-4xl mx-auto text-center">
                 <motion.h1
                     initial={{ opacity: 0, y: 20 }}
