@@ -229,33 +229,57 @@ export const Folders = () => {
     const runClassification = async () => {
         setIsClassifying(true);
         try {
-            const results = await classifyNotesIntoFolders(notes);
-
             const { data: userData } = await supabase.auth.getUser();
             if (!userData.user) return;
 
-            // Save new folders and update notes
+            // 1. Get existing folders to avoid duplicates
+            const { data: existingFolders } = await supabase
+                .from('folders')
+                .select('id, name')
+                .eq('user_id', userData.user.id);
+
+            const folderMap = new Map<string, string>();
+            if (existingFolders) {
+                existingFolders.forEach(f => folderMap.set(f.name.toLowerCase(), f.id));
+            }
+
+            // 2. Run AI Classification
+            const results = await classifyNotesIntoFolders(notes);
+
+            // 3. Process proposed folders
             for (const folder of results) {
-                // If folder doesn't exist (simulated by fake ID from AI), create it
-                let folderId = folder.id;
-                if (!folderId.includes('-')) { // Basic check for UUID vs AI fake ID
+                let folderId = '';
+                const normalizedName = folder.name.toLowerCase();
+
+                // Check if folder already exists
+                if (folderMap.has(normalizedName)) {
+                    folderId = folderMap.get(normalizedName)!;
+                } else {
+                    // Create new folder
                     const { data: newFolder } = await supabase
                         .from('folders')
                         .insert([{ name: folder.name, user_id: userData.user.id }])
                         .select()
                         .single();
-                    if (newFolder) folderId = newFolder.id;
+
+                    if (newFolder) {
+                        folderId = newFolder.id;
+                        folderMap.set(normalizedName, folderId); // Store for current batch
+                    }
                 }
 
-                // Update notes within this folder
-                await supabase
-                    .from('notes')
-                    .update({ folder_id: folderId })
-                    .in('id', folder.noteIds);
+                // 4. Update all notes assigned to this folder
+                if (folderId && folder.noteIds.length > 0) {
+                    await supabase
+                        .from('notes')
+                        .update({ folder_id: folderId })
+                        .in('id', folder.noteIds);
+                }
             }
+
             fetchData();
         } catch (e) {
-            console.error(e);
+            console.error('Classification error:', e);
         } finally {
             setIsClassifying(false);
         }
