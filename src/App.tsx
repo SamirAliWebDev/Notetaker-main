@@ -19,14 +19,14 @@ const Landing = () => (
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="max-w-3xl mx-auto bg-zinc-900 rounded-[3rem] p-16 text-white shadow-2xl relative overflow-hidden"
+          className="max-w-3xl mx-auto bg-zinc-900 rounded-[2rem] md:rounded-[3rem] p-10 md:p-20 text-white shadow-2xl relative overflow-hidden"
         >
           <div className="relative z-10">
-            <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">Ready to organize <br /> your thoughts?</h2>
-            <p className="text-zinc-400 text-lg mb-10 max-w-lg mx-auto leading-relaxed">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-6 leading-tight">Ready to organize <br className="hidden sm:block" /> your thoughts?</h2>
+            <p className="text-zinc-400 text-base md:text-lg mb-10 max-w-lg mx-auto leading-relaxed">
               Join thousands of thinkers using Note.ai to ship their ideas faster.
             </p>
-            <Link to="/login" className="inline-flex items-center gap-2 bg-white text-zinc-900 px-10 py-4 rounded-full text-lg font-bold hover:bg-zinc-100 transition-all shadow-xl active:scale-95">
+            <Link to="/login" className="inline-flex items-center gap-2 bg-white text-zinc-900 px-8 md:px-10 py-3.5 md:py-4 rounded-full text-base md:text-lg font-bold hover:bg-zinc-100 transition-all shadow-xl active:scale-95">
               Start writing now
             </Link>
           </div>

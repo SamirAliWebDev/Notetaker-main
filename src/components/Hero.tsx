@@ -9,7 +9,7 @@ export const Hero = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
-                    className="text-6xl md:text-7xl font-extrabold tracking-tighter text-zinc-900 leading-[1.1]"
+                    className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tighter text-zinc-900 leading-[1.1]"
                 >
                     Your notes, organized by <span className="bg-gradient-to-r from-zinc-900 via-zinc-500 to-zinc-900 bg-clip-text text-transparent">intelligence</span>.
                 </motion.h1>

@@ -20,49 +20,53 @@ export interface Folder {
     noteIds: string[]; // Changed to string array for Supabase UUIDs
 }
 
-export const classifyNotesIntoFolders = async (notes: Note[]): Promise<Folder[]> => {
+export const classifyNotesIntoFolders = async (notes: Note[], existingFolderNames: string[] = []): Promise<Folder[]> => {
     if (notes.length === 0) return [];
 
     const prompt = `
-    You are an intelligent note organizer for "Note.ai".
-    Your task is to organize the following notes into meaningful folders based on their titles and content.
+    You are a professional knowledge management assistant for "Note.ai".
+    Objective: Organize the provided notes into a clean, logical folder structure.
     
-    Notes:
-    ${notes.map(n => `- ID: ${n.id}, Title: "${n.title}", Content Preview: "${n.content.substring(0, 100)}..."`).join('\n')}
+    Existing Folders: ${existingFolderNames.length > 0 ? existingFolderNames.join(', ') : 'None yet'}
+    
+    Notes to process:
+    ${notes.map(n => `- ID: ${n.id}, Title: "${n.title || 'Untitled'}", Content: "${n.content.replace(/<[^>]*>/g, '').substring(0, 150)}..."`).join('\n')}
 
     Rules:
-    1. Create a logical set of folders.
-    2. Respond ONLY with a valid JSON array of folder objects.
-    3. Each folder object MUST have: "id" (string), "name" (string), and "noteIds" (array of strings).
-    4. Every note must belong to at least one folder.
+    1. PRIORITY: If a note fits into one of the "Existing Folders", you MUST use that folder name.
+    2. INTELLIGENCE: Group related notes (e.g., "React Hooks" and "Vite Setup" both belong in "Development").
+    3. MINIMALISM: Do not create too many folders. Aim for 3-5 broad categories unless more are strictly necessary.
+    4. FORMAT: Respond ONLY with a valid JSON array of folder objects.
+    5. SCHEMA: Each object must have "id" (string), "name" (string), and "noteIds" (string array).
     
-    Example response format:
+    Example:
     [
-      {"id": "f1", "name": "Work", "noteIds": ["uuid-1", "uuid-2"]},
-      {"id": "f2", "name": "Personal", "noteIds": ["uuid-3"]}
+      {"id": "auto-1", "name": "Work", "noteIds": ["uuid-1", "uuid-2"]},
+      {"id": "auto-2", "name": "Personal", "noteIds": ["uuid-3"]}
     ]
   `;
 
     try {
         const completion = await groq.chat.completions.create({
-            messages: [{ role: 'user', content: prompt }],
+            messages: [
+                { role: 'system', content: 'You are an elite organizational AI that excels at categorizing information with high precision.' },
+                { role: 'user', content: prompt }
+            ],
             model: 'llama-3.3-70b-versatile',
             response_format: { type: 'json_object' },
+            temperature: 0.1, // Low temperature for consistent categorization
         });
 
         const responseContent = completion.choices[0]?.message?.content;
-        if (!responseContent) throw new Error('No content returned from Groq');
+        if (!responseContent) throw new Error('No content from Groq');
 
-        // Some models wrap in a parent object even if asked for array, handle that
         const parsed = JSON.parse(responseContent);
-        return Array.isArray(parsed) ? parsed : (parsed.folders || []);
+        const folders = Array.isArray(parsed) ? parsed : (parsed.folders || []);
+
+        // Ensure we only return folders that actually have notes
+        return folders.filter((f: Folder) => f.noteIds && f.noteIds.length > 0);
     } catch (error) {
-        console.error('Error with Groq classification:', error);
-        // Return a fallback "Uncategorized" folder if AI fails
-        return [{
-            id: 'default',
-            name: 'All Notes',
-            noteIds: notes.map(n => n.id)
-        }];
+        console.error('AI Classification error:', error);
+        return [];
     }
 };

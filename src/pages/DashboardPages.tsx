@@ -116,52 +116,48 @@ export const Notes = () => {
             updated_at: new Date().toISOString()
         };
 
-        let result;
-        if (updatedNote.id === 'new') {
-            result = await supabase.from('notes').insert([noteToSave]).select();
-        } else {
-            result = await supabase.from('notes').update(noteToSave).eq('id', updatedNote.id).select();
-        }
+        const result = updatedNote.id === 'new'
+            ? await supabase.from('notes').insert([noteToSave]).select()
+            : await supabase.from('notes').update(noteToSave).eq('id', updatedNote.id).select();
 
         if (!result.error) {
             fetchNotes();
             setEditingNote(null);
-            // Trigger background sorting for the new/updated note
-            if (updatedNote.id === 'new') {
-                runBackgroundSort();
-            }
+            // Run intelligent sorting in the background
+            runIntelligentSort();
         }
     };
 
-    const runBackgroundSort = async () => {
+    const runIntelligentSort = async () => {
         const { data: latestNotes } = await supabase.from('notes').select('*');
-        if (latestNotes && latestNotes.length > 0) {
-            const formattedNotes = latestNotes.map(n => ({
-                id: n.id,
-                title: n.title,
-                content: n.content,
-                modified: new Date(n.updated_at).toLocaleDateString(),
-                folder_id: n.folder_id
-            }));
-            await classifyNotesIntoFolders(formattedNotes).then(async (results) => {
-                const { data: userData } = await supabase.auth.getUser();
-                if (!userData.user) return;
+        const { data: userData } = await supabase.auth.getUser();
+        if (!latestNotes || !userData.user) return;
 
-                const { data: existingFolders } = await supabase.from('folders').select('id, name').eq('user_id', userData.user.id);
-                const folderMap = new Map();
-                existingFolders?.forEach(f => folderMap.set(f.name.toLowerCase(), f.id));
+        const { data: existingFolders } = await supabase.from('folders').select('id, name').eq('user_id', userData.user.id);
+        const folders = existingFolders || [];
+        const folderNames = folders.map(f => f.name);
 
-                for (const folder of results) {
-                    let folderId = folderMap.get(folder.name.toLowerCase());
-                    if (!folderId) {
-                        const { data: newF } = await supabase.from('folders').insert([{ name: folder.name, user_id: userData.user.id }]).select().single();
-                        if (newF) folderId = newF.id;
-                    }
-                    if (folderId) {
-                        await supabase.from('notes').update({ folder_id: folderId }).in('id', folder.noteIds);
-                    }
-                }
-            });
+        const formattedNotes = latestNotes.map(n => ({
+            id: n.id,
+            title: n.title,
+            content: n.content,
+            modified: new Date(n.updated_at).toLocaleDateString(),
+            folder_id: n.folder_id
+        }));
+
+        const results = await classifyNotesIntoFolders(formattedNotes, folderNames);
+
+        for (const folder of results) {
+            let folderId = folders.find(f => f.name.toLowerCase().trim() === folder.name.toLowerCase().trim())?.id;
+
+            if (!folderId) {
+                const { data: newF } = await supabase.from('folders').insert([{ name: folder.name, user_id: userData.user.id }]).select().single();
+                if (newF) folderId = newF.id;
+            }
+
+            if (folderId) {
+                await supabase.from('notes').update({ folder_id: folderId }).in('id', folder.noteIds);
+            }
         }
     };
 
@@ -285,6 +281,7 @@ export const Folders = () => {
     };
 
     const runClassification = async () => {
+        if (isClassifying) return;
         setIsClassifying(true);
         try {
             const { data: userData } = await supabase.auth.getUser();
@@ -296,37 +293,28 @@ export const Folders = () => {
                 .select('id, name')
                 .eq('user_id', userData.user.id);
 
-            const folderMap = new Map<string, string>();
-            if (existingFolders) {
-                existingFolders.forEach(f => folderMap.set(f.name.toLowerCase(), f.id));
-            }
+            const folders = existingFolders || [];
+            const folderNames = folders.map(f => f.name);
 
-            // 2. Run AI Classification
-            const results = await classifyNotesIntoFolders(notes);
+            // 2. Run AI Classification with context of existing folders
+            const results = await classifyNotesIntoFolders(notes, folderNames);
 
-            // 3. Process proposed folders
+            // 3. Process proposed folders using robust name matching
             for (const folder of results) {
-                let folderId = '';
-                const normalizedName = folder.name.toLowerCase();
+                let folderId = folders.find(f => f.name.toLowerCase().trim() === folder.name.toLowerCase().trim())?.id;
 
-                // Check if folder already exists
-                if (folderMap.has(normalizedName)) {
-                    folderId = folderMap.get(normalizedName)!;
-                } else {
-                    // Create new folder
+                if (!folderId) {
+                    // Create new folder only if absolutely necessary
                     const { data: newFolder } = await supabase
                         .from('folders')
                         .insert([{ name: folder.name, user_id: userData.user.id }])
                         .select()
                         .single();
 
-                    if (newFolder) {
-                        folderId = newFolder.id;
-                        folderMap.set(normalizedName, folderId); // Store for current batch
-                    }
+                    if (newFolder) folderId = newFolder.id;
                 }
 
-                // 4. Update all notes assigned to this folder
+                // 4. Update notes
                 if (folderId && folder.noteIds.length > 0) {
                     await supabase
                         .from('notes')
