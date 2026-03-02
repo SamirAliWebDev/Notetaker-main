@@ -56,12 +56,12 @@ const NoteEditor = ({ note, onSave, onDiscard, onDelete }: NoteEditorProps) => {
                     </button>
                 </div>
             </div>
-            <div className="flex-1 bg-white border border-zinc-100 rounded-3xl shadow-sm p-10 flex flex-col overflow-hidden">
+            <div className="flex-1 bg-white border border-zinc-100 rounded-2xl md:rounded-3xl shadow-sm p-6 md:p-10 flex flex-col overflow-hidden">
                 <input
                     value={editingNote.title}
                     onChange={(e) => setEditingNote({ ...editingNote, title: e.target.value })}
                     placeholder="Note title..."
-                    className="text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 border-none focus:ring-0 w-full mb-6 outline-none bg-transparent"
+                    className="text-2xl md:text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 border-none focus:ring-0 w-full mb-4 md:mb-6 outline-none bg-transparent"
                 />
                 <div className="flex-1 overflow-y-auto pr-4">
                     <RichTextEditor content={editingNote.content} onChange={(content) => setEditingNote({ ...editingNote, content })} />
@@ -126,6 +126,42 @@ export const Notes = () => {
         if (!result.error) {
             fetchNotes();
             setEditingNote(null);
+            // Trigger background sorting for the new/updated note
+            if (updatedNote.id === 'new') {
+                runBackgroundSort();
+            }
+        }
+    };
+
+    const runBackgroundSort = async () => {
+        const { data: latestNotes } = await supabase.from('notes').select('*');
+        if (latestNotes && latestNotes.length > 0) {
+            const formattedNotes = latestNotes.map(n => ({
+                id: n.id,
+                title: n.title,
+                content: n.content,
+                modified: new Date(n.updated_at).toLocaleDateString(),
+                folder_id: n.folder_id
+            }));
+            await classifyNotesIntoFolders(formattedNotes).then(async (results) => {
+                const { data: userData } = await supabase.auth.getUser();
+                if (!userData.user) return;
+
+                const { data: existingFolders } = await supabase.from('folders').select('id, name').eq('user_id', userData.user.id);
+                const folderMap = new Map();
+                existingFolders?.forEach(f => folderMap.set(f.name.toLowerCase(), f.id));
+
+                for (const folder of results) {
+                    let folderId = folderMap.get(folder.name.toLowerCase());
+                    if (!folderId) {
+                        const { data: newF } = await supabase.from('folders').insert([{ name: folder.name, user_id: userData.user.id }]).select().single();
+                        if (newF) folderId = newF.id;
+                    }
+                    if (folderId) {
+                        await supabase.from('notes').update({ folder_id: folderId }).in('id', folder.noteIds);
+                    }
+                }
+            });
         }
     };
 
@@ -225,6 +261,28 @@ export const Folders = () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    // Auto-sort on load if uncategorized notes exist
+    useEffect(() => {
+        if (notes.length > 0 && !isClassifying) {
+            const hasUncategorized = notes.some(n => !n.folder_id);
+            if (hasUncategorized) {
+                runClassification();
+            }
+        }
+    }, [notes]);
+
+    const handleDeleteFolder = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        if (!confirm('Delete this folder? Notes inside will be moved to "All Notes".')) return;
+
+        // First, clear folder_id for notes in this folder
+        await supabase.from('notes').update({ folder_id: null }).eq('folder_id', id);
+
+        // Then delete the folder
+        const { error } = await supabase.from('folders').delete().eq('id', id);
+        if (!error) fetchData();
+    };
 
     const runClassification = async () => {
         setIsClassifying(true);
@@ -331,12 +389,19 @@ export const Folders = () => {
                                 </div>
                             ) : (
                                 folders.map((folder) => (
-                                    <div key={folder.id} onClick={() => setSelectedFolder(folder)} className="group p-6 bg-white border border-zinc-100 rounded-3xl hover:border-zinc-900 hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col items-start gap-4">
+                                    <div key={folder.id} onClick={() => setSelectedFolder(folder)} className="group p-6 bg-white border border-zinc-100 rounded-3xl hover:border-zinc-900 hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col items-start gap-4 relative">
+                                        <button
+                                            onClick={(e) => handleDeleteFolder(e, folder.id)}
+                                            className="absolute top-6 right-6 p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-10"
+                                            title="Delete folder"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                         <div className="p-3 bg-zinc-50 rounded-2xl group-hover:bg-zinc-900 group-hover:text-white transition-colors duration-300">
                                             <FolderIcon className="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <h3 className="text-lg font-bold text-zinc-900 truncate w-full">{folder.name}</h3>
+                                            <h3 className="text-lg font-bold text-zinc-900 truncate w-full pr-10">{folder.name}</h3>
                                             <p className="text-sm text-zinc-500 mt-1">{folder.noteIds.length} notes sorted</p>
                                         </div>
                                         <div className="w-full h-px bg-zinc-50 my-2" />
@@ -429,18 +494,18 @@ export const Settings = () => {
         <div className="max-w-4xl mx-auto">
             <h1 className="text-3xl font-bold text-zinc-900 mb-8">Settings</h1>
 
-            <div className="bg-white border border-zinc-100 rounded-3xl shadow-sm overflow-hidden">
-                <div className="p-8 border-b border-zinc-50">
+            <div className="bg-white border border-zinc-100 rounded-2xl md:rounded-3xl shadow-sm overflow-hidden">
+                <div className="p-6 md:p-8 border-b border-zinc-50">
                     <h3 className="text-lg font-bold text-zinc-900 mb-1">Profile Information</h3>
                     <p className="text-sm text-zinc-500">Manage your account details and how others see you.</p>
                 </div>
 
-                <div className="p-8 space-y-8">
-                    <div className="flex items-center gap-6">
+                <div className="p-6 md:p-8 space-y-8">
+                    <div className="flex flex-col sm:flex-row items-center gap-6">
                         <div className="w-20 h-20 rounded-full bg-zinc-900 flex items-center justify-center text-white text-2xl font-bold">
                             {user.name.charAt(0).toUpperCase()}
                         </div>
-                        <div>
+                        <div className="text-center sm:text-left">
                             <h4 className="text-xl font-bold text-zinc-900">{user.name}</h4>
                             <p className="text-zinc-500">{user.email}</p>
                         </div>
