@@ -10,6 +10,7 @@ import { Notes, Folders, Shared, Settings } from './pages/DashboardPages';
 import { Workflow } from './components/Workflow';
 import { Pricing } from './components/Pricing';
 import { FAQ } from './components/FAQ';
+import { Analytics } from "@vercel/analytics/react"
 
 const Landing = () => (
   <div className="min-h-screen bg-background selection:bg-zinc-200">
@@ -52,6 +53,7 @@ const Landing = () => (
 function App() {
   return (
     <Router>
+      <Analytics />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
