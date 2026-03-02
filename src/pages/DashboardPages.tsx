@@ -56,12 +56,12 @@ const NoteEditor = ({ note, onSave, onDiscard, onDelete }: NoteEditorProps) => {
                     </button>
                 </div>
             </div>
-            <div className="flex-1 bg-white border border-zinc-100 rounded-2xl md:rounded-3xl shadow-sm p-6 md:p-10 flex flex-col overflow-hidden">
+            <div className="flex-1 bg-white border border-zinc-100 rounded-3xl shadow-sm p-6 sm:p-10 flex flex-col overflow-hidden">
                 <input
                     value={editingNote.title}
                     onChange={(e) => setEditingNote({ ...editingNote, title: e.target.value })}
                     placeholder="Note title..."
-                    className="text-2xl md:text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 border-none focus:ring-0 w-full mb-4 md:mb-6 outline-none bg-transparent"
+                    className="text-2xl sm:text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 border-none focus:ring-0 w-full mb-4 sm:mb-6 outline-none bg-transparent"
                 />
                 <div className="flex-1 overflow-y-auto pr-4">
                     <RichTextEditor content={editingNote.content} onChange={(content) => setEditingNote({ ...editingNote, content })} />
@@ -76,6 +76,7 @@ export const Notes = () => {
     const [notes, setNotes] = useState<Note[]>([]);
     const [editingNote, setEditingNote] = useState<Note | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isClassifying, setIsClassifying] = useState(false); // Added for AI Sort button
 
     useEffect(() => {
         fetchNotes();
@@ -129,35 +130,43 @@ export const Notes = () => {
     };
 
     const runIntelligentSort = async () => {
-        const { data: latestNotes } = await supabase.from('notes').select('*');
-        const { data: userData } = await supabase.auth.getUser();
-        if (!latestNotes || !userData.user) return;
+        setIsClassifying(true); // Set classifying state
+        try {
+            const { data: latestNotes } = await supabase.from('notes').select('*');
+            const { data: userData } = await supabase.auth.getUser();
+            if (!latestNotes || !userData.user) return;
 
-        const { data: existingFolders } = await supabase.from('folders').select('id, name').eq('user_id', userData.user.id);
-        const folders = existingFolders || [];
-        const folderNames = folders.map(f => f.name);
+            const { data: existingFolders } = await supabase.from('folders').select('id, name').eq('user_id', userData.user.id);
+            const folders = existingFolders || [];
+            const folderNames = folders.map(f => f.name);
 
-        const formattedNotes = latestNotes.map(n => ({
-            id: n.id,
-            title: n.title,
-            content: n.content,
-            modified: new Date(n.updated_at).toLocaleDateString(),
-            folder_id: n.folder_id
-        }));
+            const formattedNotes = latestNotes.map(n => ({
+                id: n.id,
+                title: n.title,
+                content: n.content,
+                modified: new Date(n.updated_at).toLocaleDateString(),
+                folder_id: n.folder_id
+            }));
 
-        const results = await classifyNotesIntoFolders(formattedNotes, folderNames);
+            const results = await classifyNotesIntoFolders(formattedNotes, folderNames);
 
-        for (const folder of results) {
-            let folderId = folders.find(f => f.name.toLowerCase().trim() === folder.name.toLowerCase().trim())?.id;
+            for (const folder of results) {
+                let folderId = folders.find(f => f.name.toLowerCase().trim() === folder.name.toLowerCase().trim())?.id;
 
-            if (!folderId) {
-                const { data: newF } = await supabase.from('folders').insert([{ name: folder.name, user_id: userData.user.id }]).select().single();
-                if (newF) folderId = newF.id;
+                if (!folderId) {
+                    const { data: newF } = await supabase.from('folders').insert([{ name: folder.name, user_id: userData.user.id }]).select().single();
+                    if (newF) folderId = newF.id;
+                }
+
+                if (folderId) {
+                    await supabase.from('notes').update({ folder_id: folderId }).in('id', folder.noteIds);
+                }
             }
-
-            if (folderId) {
-                await supabase.from('notes').update({ folder_id: folderId }).in('id', folder.noteIds);
-            }
+            fetchNotes(); // Re-fetch notes after sorting
+        } catch (error) {
+            console.error("Error during intelligent sort:", error);
+        } finally {
+            setIsClassifying(false); // Reset classifying state
         }
     };
 
@@ -172,12 +181,29 @@ export const Notes = () => {
             <AnimatePresence mode="wait">
                 {!editingNote ? (
                     <motion.div key="list" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                        <div className="flex items-center justify-between mb-8">
-                            <h1 className="text-3xl font-bold text-zinc-900">My Notes</h1>
-                            <button onClick={startNewNote} className="flex items-center gap-2 bg-zinc-900 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-200">
-                                <Plus className="w-4 h-4" />
-                                New Note
-                            </button>
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                            <div>
+                                <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 tracking-tight">Your Notes</h1>
+                                <p className="text-zinc-500 text-sm mt-1">Capture your thoughts, ideas, and tasks.</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={runIntelligentSort}
+                                    disabled={isClassifying || notes.length === 0}
+                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-50 border border-zinc-100 rounded-2xl text-sm font-bold text-zinc-600 hover:bg-zinc-100 active:scale-95 transition-all disabled:opacity-50"
+                                >
+                                    {isClassifying ? <Loader2 className="w-4 h-4 animate-spin text-zinc-400" /> : <Sparkles className="w-4 h-4 text-zinc-900" />}
+                                    <span className="hidden sm:inline">AI Sort</span>
+                                    <span className="sm:hidden">Sort</span>
+                                </button>
+                                <button
+                                    onClick={startNewNote}
+                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-900 text-white rounded-2xl text-sm font-bold hover:bg-zinc-800 shadow-xl shadow-zinc-200 active:scale-95 transition-all"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    New Note
+                                </button>
+                            </div>
                         </div>
 
                         {loading ? (
@@ -191,9 +217,9 @@ export const Notes = () => {
                                 <button onClick={startNewNote} className="mt-4 text-sm font-semibold text-zinc-900 hover:underline">Start your first note</button>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                                 {notes.map((note) => (
-                                    <div key={note.id} className="relative group bento-card border border-zinc-100/50 hover:border-zinc-200 transition-colors">
+                                    <div key={note.id} className="relative group bento-card border border-zinc-100/50 hover:border-zinc-200 transition-colors p-4 md:p-6">
                                         <div onClick={() => setEditingNote(note)} className="cursor-pointer">
                                             <h3 className="text-lg font-bold text-zinc-900 mb-2 group-hover:text-zinc-600 transition-colors">{note.title || 'Untitled Note'}</h3>
                                             <p className="text-zinc-500 text-sm leading-relaxed line-clamp-3">{getPreviewText(note.content) || 'Start writing...'}</p>
@@ -354,19 +380,12 @@ export const Folders = () => {
                     <NoteEditor note={editingNote} onSave={handleSaveNote} onDiscard={() => setEditingNote(null)} />
                 ) : !selectedFolder ? (
                     <motion.div key="list" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                        <div className="flex items-center justify-between mb-10">
-                            <h1 className="text-3xl font-bold text-zinc-900">Folders</h1>
-                            <button
-                                onClick={runClassification}
-                                disabled={isClassifying || notes.length === 0}
-                                className="flex items-center gap-2 bg-white border border-zinc-200 px-5 py-2.5 rounded-xl text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-all shadow-sm disabled:opacity-50"
-                            >
-                                {isClassifying ? <Loader2 className="w-4 h-4 animate-spin text-zinc-400" /> : <Sparkles className="w-4 h-4 text-zinc-400" />}
-                                {isClassifying ? 'Analyzing...' : 'Refresh AI Sort'}
-                            </button>
+                        <div className="mb-8">
+                            <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 tracking-tight">Folders</h1>
+                            <p className="text-zinc-500 text-sm mt-1">AI-organized collections of your thoughts.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                             {isClassifying && folders.length === 0 ? (
                                 Array(3).fill(0).map((_, i) => <div key={i} className="h-48 rounded-2xl bg-zinc-100 animate-pulse" />)
                             ) : folders.length === 0 ? (
@@ -374,13 +393,21 @@ export const Folders = () => {
                                     <FolderIcon className="w-12 h-12 text-zinc-200 mb-4" />
                                     <h3 className="text-lg font-medium text-zinc-900 italic">No folders organized yet.</h3>
                                     <p className="text-zinc-500 text-sm mt-2 text-center max-w-xs">Write some notes and our AI will categorize them instantly.</p>
+                                    <button
+                                        onClick={runClassification}
+                                        disabled={isClassifying || notes.length === 0}
+                                        className="mt-6 flex items-center gap-2 bg-white border border-zinc-200 px-5 py-2.5 rounded-xl text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-all shadow-sm disabled:opacity-50"
+                                    >
+                                        {isClassifying ? <Loader2 className="w-4 h-4 animate-spin text-zinc-400" /> : <Sparkles className="w-4 h-4 text-zinc-400" />}
+                                        {isClassifying ? 'Analyzing...' : 'Run AI Sort'}
+                                    </button>
                                 </div>
                             ) : (
                                 folders.map((folder) => (
-                                    <div key={folder.id} onClick={() => setSelectedFolder(folder)} className="group p-6 bg-white border border-zinc-100 rounded-3xl hover:border-zinc-900 hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col items-start gap-4 relative">
+                                    <div key={folder.id} onClick={() => setSelectedFolder(folder)} className="group p-4 md:p-6 bg-white border border-zinc-100 rounded-3xl hover:border-zinc-900 hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col items-start gap-4 relative">
                                         <button
                                             onClick={(e) => handleDeleteFolder(e, folder.id)}
-                                            className="absolute top-6 right-6 p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-10"
+                                            className="absolute top-4 right-4 p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-10"
                                             title="Delete folder"
                                         >
                                             <Trash2 className="w-4 h-4" />

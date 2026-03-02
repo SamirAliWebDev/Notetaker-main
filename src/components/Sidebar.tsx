@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Folder, Share2, Settings, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const links = [
     { name: 'My Notes', path: '/dashboard', icon: Home },
@@ -36,9 +36,19 @@ export const Sidebar = ({ isCollapsed, onToggleCollapse, onCloseMobile }: Sideba
                 )}
                 <button
                     onClick={onToggleCollapse}
-                    className="p-2 rounded-xl hover:bg-zinc-50 text-zinc-400 hover:text-zinc-900 transition-colors hidden md:block"
+                    className="p-2.5 rounded-xl hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-all hidden md:block active:scale-90"
                 >
-                    {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={isCollapsed ? 'collapsed' : 'expanded'}
+                            initial={{ opacity: 0, scale: 0.8, rotate: isCollapsed ? -90 : 90 }}
+                            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                            exit={{ opacity: 0, scale: 0.8, rotate: isCollapsed ? 90 : -90 }}
+                            transition={{ duration: 0.2 }}
+                        >
+                            {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+                        </motion.div>
+                    </AnimatePresence>
                 </button>
             </div>
 
@@ -52,8 +62,8 @@ export const Sidebar = ({ isCollapsed, onToggleCollapse, onCloseMobile }: Sideba
                             to={link.path}
                             onClick={onCloseMobile}
                             className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-sm font-semibold transition-all group relative ${isActive
-                                    ? 'bg-zinc-900 text-white shadow-lg shadow-zinc-200'
-                                    : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+                                ? 'bg-zinc-900 text-white shadow-lg shadow-zinc-200'
+                                : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
                                 }`}
                         >
                             <Icon className={`w-5 h-5 flex-shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
