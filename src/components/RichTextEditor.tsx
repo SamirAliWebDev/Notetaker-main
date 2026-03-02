@@ -51,7 +51,7 @@ export const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
         onTransaction: () => setSelectionCount(c => c + 1),
         editorProps: {
             attributes: {
-                class: 'prose prose-zinc max-w-none focus:outline-none min-h-[400px] text-lg text-zinc-600 leading-relaxed p-8 bg-white',
+                class: 'prose prose-zinc max-w-none focus:outline-none min-h-[400px] text-base md:text-lg text-zinc-600 leading-relaxed p-5 md:p-8 bg-white',
             },
         },
     });

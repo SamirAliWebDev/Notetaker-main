@@ -32,38 +32,39 @@ const NoteEditor = ({ note, onSave, onDiscard, onDelete }: NoteEditorProps) => {
             exit={{ opacity: 0, scale: 0.98 }}
             className="flex flex-col h-[calc(100vh-8rem)]"
         >
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between mb-4 md:mb-6">
+                <div className="flex items-center gap-2 md:gap-3 w-full sm:w-auto">
+                    <button onClick={onDiscard} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 transition-colors text-sm font-bold active:scale-95 px-2">
+                        <ArrowLeft className="w-4 h-4" />
+                        <span className="hidden sm:inline">Discard</span>
+                    </button>
+                    <div className="flex-1 sm:hidden" />
+                    <button
+                        onClick={() => onSave(editingNote)}
+                        className="flex items-center gap-2 bg-zinc-900 text-white px-5 sm:px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-zinc-800 transition-all shadow-lg active:scale-95 ml-auto"
+                    >
+                        <Save className="w-4 h-4" />
+                        Save
+                    </button>
                     {note.id !== 'new' && onDelete && (
                         <button
                             onClick={() => onDelete(note.id)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                            className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors active:scale-90"
                             title="Delete note"
                         >
                             <Trash2 className="w-5 h-5" />
                         </button>
                     )}
-                    <button onClick={onDiscard} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 transition-colors text-sm font-medium">
-                        <ArrowLeft className="w-4 h-4" />
-                        Discard
-                    </button>
-                    <button
-                        onClick={() => onSave(editingNote)}
-                        className="flex items-center gap-2 bg-zinc-900 text-white px-6 py-2 rounded-xl text-sm font-medium hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-200"
-                    >
-                        <Save className="w-4 h-4" />
-                        Save Note
-                    </button>
                 </div>
             </div>
-            <div className="flex-1 bg-white border border-zinc-100 rounded-3xl shadow-sm p-6 sm:p-10 flex flex-col overflow-hidden">
+            <div className="flex-1 bg-white border border-zinc-100 rounded-[2.5rem] shadow-sm p-6 md:p-10 flex flex-col overflow-hidden">
                 <input
                     value={editingNote.title}
                     onChange={(e) => setEditingNote({ ...editingNote, title: e.target.value })}
                     placeholder="Note title..."
                     className="text-2xl sm:text-4xl font-bold text-zinc-900 placeholder:text-zinc-200 border-none focus:ring-0 w-full mb-4 sm:mb-6 outline-none bg-transparent"
                 />
-                <div className="flex-1 overflow-y-auto pr-4">
+                <div className="flex-1 overflow-y-auto pr-1">
                     <RichTextEditor content={editingNote.content} onChange={(content) => setEditingNote({ ...editingNote, content })} />
                 </div>
             </div>

@@ -7,6 +7,9 @@ import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { Notes, Folders, Shared, Settings } from './pages/DashboardPages';
+import { Workflow } from './components/Workflow';
+import { Pricing } from './components/Pricing';
+import { FAQ } from './components/FAQ';
 
 const Landing = () => (
   <div className="min-h-screen bg-background selection:bg-zinc-200">
@@ -14,7 +17,10 @@ const Landing = () => (
     <main>
       <Hero />
       <Features />
-      <section className="py-24 px-6 text-center">
+      <Workflow />
+      <Pricing />
+      <FAQ />
+      <section className="py-24 px-6 text-center overflow-hidden">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
